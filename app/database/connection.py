@@ -93,7 +93,7 @@ async def create_indexes():
 
 def get_database():
     """Get database instance"""
-    if not mongodb.database:
+    if mongodb.database is None:  # SOLUCIÓN: Usar 'is None' en lugar de truthiness
         raise ConnectionError("Database not connected. Call connect_to_mongo() first.")
     return mongodb.database
 

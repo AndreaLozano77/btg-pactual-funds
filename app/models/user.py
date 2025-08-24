@@ -84,7 +84,7 @@ class UserUpdate(BaseModel):
 class UserResponse(BaseModel):
     id: str
     email: str
-    phone: Optional[str]
+    phone: Optional[str] = None
     full_name: str
     balance: int
     notification_preference: str
@@ -92,8 +92,13 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
 
+    # ✅ AGREGA ESTA CONFIGURACIÓN:
     class Config:
-        from_attributes = True
+        extra = "ignore"  # Ignora campos extra que vengan de MongoDB
+        allow_population_by_field_name = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
 
 
 class UserBalance(BaseModel):

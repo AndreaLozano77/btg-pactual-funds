@@ -5,7 +5,7 @@ from app.models.fund import Fund, FundCreate, FundUpdate
 from app.models.transaction import Transaction, TransactionHistory
 from app.models.user_balance import UserBalance, SubscriptionRequest, CancellationRequest
 from app.services.fund_service import FundService
-from app.auth.security import get_current_user
+from app.auth.security import get_current_user, get_current_admin_user
 from app.models.user import UserResponse
 import logging
 

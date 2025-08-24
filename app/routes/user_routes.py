@@ -3,7 +3,8 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
 from app.models.user import UserCreate, UserUpdate, UserResponse, UserLogin
 from app.services.user_service import UserService
-from app.auth.security import get_current_user, get_current_admin_user, SecurityManager
+from app.auth.security import get_current_user, get_current_admin_user
+from app.auth.security import SecurityManager
 import logging
 
 logger = logging.getLogger(__name__)
@@ -66,18 +67,39 @@ async def login_user(credentials: UserLogin):
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        # Check if user account is active
         if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User account is disabled"
             )
         
-        # Create JWT token
-        token_response = SecurityManager.create_user_token(user)
+        # ✅ SOLUCIÓN: Crear token manualmente
+        from datetime import datetime, timedelta
+        from jose import jwt
+        import os
+        
+        # Datos para el token
+        token_data = {
+            "sub": user.email,
+            "id": user.id,
+            "exp": datetime.utcnow() + timedelta(hours=24)
+        }
+        
+        # Crear token (usa variable de entorno en producción)
+        secret_key = os.getenv("JWT_SECRET_KEY", "temp-secret-key-for-development")
+        access_token = jwt.encode(token_data, secret_key, algorithm="HS256")
         
         logger.info(f"User {user.email} logged in successfully")
-        return token_response
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "expires_in": 86400,  # 24 horas en segundos
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name
+            }
+        }
         
     except HTTPException:
         raise

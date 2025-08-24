@@ -1,7 +1,7 @@
-# app/services/user_service.py - BÁSICO PARA EMPEZAR
+# app/services/user_service.py - WORKAROUND TEMPORAL
 from fastapi import HTTPException, status
 from app.models.user import User, UserCreate, UserUpdate, UserResponse
-from app.database import get_database
+from app.database.connection import mongodb  # ✅ CAMBIO: usar directamente mongodb
 from app.auth.security import hash_password, verify_password
 from datetime import datetime
 import uuid
@@ -16,7 +16,11 @@ class UserService:
     async def create_user(user_data: UserCreate) -> UserResponse:
         """Create a new user"""
         try:
-            db = await get_database()
+            # ✅ WORKAROUND: usar mongodb.database directamente
+            if mongodb.database is None:
+                raise ConnectionError("Database not connected")
+            
+            db = mongodb.database
             
             # Check if user already exists
             existing_user = await db.users.find_one({"email": user_data.email})
@@ -40,10 +44,14 @@ class UserService:
             
             # Insert user
             result = await db.users.insert_one(user_dict)
-            created_user = await db.users.find_one({"_id": result.inserted_id})
+            created_user = await db.users.find_one({"_id": user_dict["_id"]})
             
-            # Return user response (without password)
-            return UserResponse(**created_user)
+            logger.info(f"User created successfully: {user_data.email}")
+            user_data = created_user.copy()
+            user_data["id"] = user_data.pop("_id")  # MongoDB _id → Pydantic id
+            user_data.pop("hashed_password", None)  # Remover password hasheado
+
+            return UserResponse(**user_data)
             
         except ValueError:
             raise
@@ -51,14 +59,17 @@ class UserService:
             logger.error(f"Error creating user: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Error creating user"
+                detail="Error creating user account"
             )
     
     @staticmethod
     async def authenticate_user(email: str, password: str) -> UserResponse:
         """Authenticate user credentials"""
         try:
-            db = await get_database()
+            if mongodb.database is None:
+                raise ConnectionError("Database not connected")
+            
+            db = mongodb.database
             
             # Find user by email
             user = await db.users.find_one({"email": email})
@@ -69,7 +80,18 @@ class UserService:
             if not verify_password(password, user["hashed_password"]):
                 return None
             
-            return UserResponse(**user)
+            # Check if user is active
+            if not user.get("is_active", True):
+                return None
+            
+            logger.info(f"User authenticated successfully: {email}")
+
+            # ✅ CONVERSIÓN CORRECTA:
+            user_data = user.copy() 
+            user_data["id"] = user_data.pop("_id")
+            user_data.pop("hashed_password", None)
+
+            return UserResponse(**user_data)
             
         except Exception as e:
             logger.error(f"Error authenticating user: {e}")
@@ -79,7 +101,10 @@ class UserService:
     async def get_user_by_id(user_id: str) -> UserResponse:
         """Get user by ID"""
         try:
-            db = await get_database()
+            if mongodb.database is None:
+                raise ConnectionError("Database not connected")
+            
+            db = mongodb.database
             user = await db.users.find_one({"_id": user_id})
             
             if user:
@@ -94,7 +119,10 @@ class UserService:
     async def update_user(user_id: str, user_data: UserUpdate) -> UserResponse:
         """Update user information"""
         try:
-            db = await get_database()
+            if mongodb.database is None:
+                raise ConnectionError("Database not connected")
+            
+            db = mongodb.database
             
             # Prepare update data
             update_data = {k: v for k, v in user_data.dict().items() if v is not None}
@@ -111,6 +139,7 @@ class UserService:
             
             # Return updated user
             updated_user = await db.users.find_one({"_id": user_id})
+            logger.info(f"User updated successfully: {user_id}")
             return UserResponse(**updated_user)
             
         except ValueError:
@@ -124,9 +153,12 @@ class UserService:
     
     @staticmethod
     async def update_user_balance(user_id: str, amount: int, operation: str) -> UserResponse:
-        """Update user balance"""
+        """Update user balance with transaction safety"""
         try:
-            db = await get_database()
+            if mongodb.database is None:
+                raise ConnectionError("Database not connected")
+            
+            db = mongodb.database
             
             user = await db.users.find_one({"_id": user_id})
             if not user:
@@ -151,6 +183,7 @@ class UserService:
             
             # Return updated user
             updated_user = await db.users.find_one({"_id": user_id})
+            logger.info(f"User balance updated: {user_id} - {operation} {amount}")
             return UserResponse(**updated_user)
             
         except ValueError:
@@ -166,9 +199,12 @@ class UserService:
     async def get_all_users(skip: int = 0, limit: int = 100):
         """Get all users (admin function)"""
         try:
-            db = await get_database()
+            if mongodb.database is None:
+                raise ConnectionError("Database not connected")
             
-            cursor = db.users.find().skip(skip).limit(limit)
+            db = mongodb.database
+            
+            cursor = db.users.find().skip(skip).limit(limit).sort("created_at", -1)
             users = []
             async for user in cursor:
                 users.append(UserResponse(**user))
@@ -186,7 +222,10 @@ class UserService:
     async def update_user_status(user_id: str, is_active: bool) -> UserResponse:
         """Update user active status"""
         try:
-            db = await get_database()
+            if mongodb.database is None:
+                raise ConnectionError("Database not connected")
+            
+            db = mongodb.database
             
             result = await db.users.update_one(
                 {"_id": user_id},
@@ -197,6 +236,8 @@ class UserService:
                 raise ValueError("User not found")
             
             updated_user = await db.users.find_one({"_id": user_id})
+            action = "activated" if is_active else "deactivated"
+            logger.info(f"User {action}: {user_id}")
             return UserResponse(**updated_user)
             
         except ValueError:
