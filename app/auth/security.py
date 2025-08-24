@@ -12,7 +12,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Configuration
-SECRET_KEY = os.getenv("SECRET_KEY", "btg-pactual-super-secret-key-change-in-production")
+JWT_SECRET = os.getenv("JWT_SECRET", "btg-pactual-super-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
@@ -60,7 +60,7 @@ class SecurityManager:
             "type": "access"
         })
         
-        encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        encoded_jwt = jwt.encode(to_encode, JWT_SECRET, algorithm=ALGORITHM)
         return encoded_jwt
     
     @staticmethod
@@ -75,7 +75,7 @@ class SecurityManager:
             Decoded token payload or None if invalid
         """
         try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
             
             # Check if token is expired
             exp = payload.get("exp")

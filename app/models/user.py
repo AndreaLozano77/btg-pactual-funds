@@ -34,11 +34,11 @@ class User(BaseModel):
         return v
 
     class Config:
-        allow_population_by_field_name = True
+        populate_by_name = True
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "email": "cliente@btgpactual.com",
                 "phone": "+573001234567",
